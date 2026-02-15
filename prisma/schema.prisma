@@ -1,0 +1,266 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  AGENT
+}
+
+enum ClientType {
+  LEAD
+  CLIENT
+  INVESTOR
+  OWNER
+}
+
+enum Urgency {
+  HOT
+  WARM
+  COLD
+}
+
+enum ClientStatus {
+  OPEN
+  FOLLOW_UP
+  CLOSED
+}
+
+enum ListingCategory {
+  OFF_PLAN
+  READY
+  SECONDARY
+}
+
+enum ListingStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  OFF_MARKET
+}
+
+enum PropertyType {
+  APARTMENT
+  VILLA
+  TOWNHOUSE
+  PENTHOUSE
+  LAND
+}
+
+enum ListingType {
+  OFF_PLAN
+  FOR_SALE
+  FOR_RENT
+}
+
+enum Currency {
+  USD
+  AED
+  EUR
+}
+
+model User {
+  id           String   @id @default(cuid())
+  fullName     String
+  email        String   @unique
+  phone        String?
+  passwordHash String
+  role         Role     @default(AGENT)
+  isActive     Boolean  @default(true)
+
+  slug       String?  @unique
+  title      String?
+  bio        String?
+  languages  String[] @default([])
+  photoUrl   String?
+  hero       String?
+  sortOrder  Int      @default(0)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  listingsCreated  Listing[] @relation("ListingsCreated")
+  listingsAssigned Listing[] @relation("ListingsAssigned")
+
+  clientsCreated   Client[]  @relation("ClientsCreated")
+  clientsAssigned  Client[]  @relation("ClientAssignedTo")
+
+  @@index([role])
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+model Client {
+  id              String       @id @default(cuid())
+  clientType      ClientType
+  name            String
+  dateContacted   DateTime
+  source          String
+  phone           String?
+  email           String?
+  interestedArea  String?
+  budgetMin       Int?
+  budgetMax       Int?
+  bedrooms Int?
+
+  urgency         Urgency
+
+  // ✅ added to match your UI
+  status          ClientStatus  @default(OPEN)
+  projectShared   String?
+  feedback        String?
+
+  agentAssignedId String?
+  agentAssigned   User?         @relation("ClientAssignedTo", fields: [agentAssignedId], references: [id])
+
+  createdById     String
+  createdBy       User          @relation("ClientsCreated", fields: [createdById], references: [id])
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([agentAssignedId])
+  @@index([createdById])
+  @@index([clientType])
+  @@index([urgency])
+  @@index([status])
+}
+
+model Listing {
+  id              String          @id @default(cuid())
+  latitude     Float?
+  longitude    Float?
+  addressText  String?
+
+  listingType     ListingType     @default(OFF_PLAN)
+  featured        Boolean         @default(false)
+  isHidden        Boolean         @default(false)
+  deletedAt       DateTime?
+
+  country         String?
+  locationLabel   String?
+  community       String?
+  developerName   String?
+  completionYear  Int?
+  startingPrice   Int?
+  currency        Currency        @default(USD)
+  description     String?
+
+  title           String
+  propertyType    PropertyType
+  category        ListingCategory
+  status          ListingStatus   @default(AVAILABLE)
+
+  city            String
+  area            String
+  projectName     String?
+
+  price           Int?
+  paymentPlan     String?
+  sizeSqft        Int?
+  sizeSqm         Int?
+  bedrooms        Int?
+  bathrooms       Int?
+  parking         Int?
+  view            String?
+
+  ownerName       String?
+  ownerType       String?
+  listingSource   String?
+
+  createdById     String
+  createdBy       User            @relation("ListingsCreated", fields: [createdById], references: [id])
+
+  assignedAgentId String?
+  assignedAgent   User?           @relation("ListingsAssigned", fields: [assignedAgentId], references: [id])
+
+  images          ListingImage[]
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([area])
+  @@index([status])
+  @@index([assignedAgentId])
+  @@index([createdById])
+
+  @@index([listingType])
+  @@index([featured])
+  @@index([isHidden])
+  @@index([deletedAt])
+
+  @@index([country])
+}
+
+model ListingImage {
+  id        String   @id @default(cuid())
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  url       String
+  key       String
+  order     Int      @default(0)
+  isCover   Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([listingId])
+  @@index([isCover])
+  @@index([order])
+}
+
+
+model Developer {
+  id            String   @id @default(cuid())
+  name          String
+  description   String
+  logoUrl       String
+  website       String?
+  isFeatured    Boolean  @default(true)
+  featuredOrder Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([isFeatured])
+  @@index([featuredOrder])
+}
+model CareerJob {
+  id              String   @id @default(cuid())
+  title           String
+  type            String   // Full-time, Part-time...
+  location        String
+  dept            String
+  workMode        String?  // Onsite / Hybrid / Remote
+  seniority       String?  // Junior / Mid / Senior
+  currency        String?  // AED, USD
+  salaryMin       Int?
+  salaryMax       Int?
+  responsibilities String?
+  requirements    String?
+  benefits        String?
+  applyEmail      String?  // optional override (default hr@aouad.com)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  applications    CareerApplication[]
+}
+
+model CareerApplication {
+  id          String   @id @default(cuid())
+  jobId       String
+  job         CareerJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  fullName    String
+  email       String
+  phone       String?
+  coverLetter String?
+  cvUrl       String?   // saved file URL like /uploads/cv/xxx.pdf
+
+  createdAt   DateTime @default(now())
+}
