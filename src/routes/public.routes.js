@@ -103,6 +103,7 @@ router.get("/agents/:slug/listings", async (req, res) => {
         images: { orderBy: { order: "asc" } },
         assignedAgent: {
           select: {
+            id: true,               // ✅ ADD
             fullName: true,
             slug: true,
             phone: true,
@@ -133,7 +134,7 @@ router.get("/agents/:slug/listings", async (req, res) => {
         completionYear: l.completionYear || null,
         handover: l.completionYear ? `Handover by ${l.completionYear}` : null,
 
-        // ✅ MAP FIELDS (optional on cards)
+        // ✅ MAP
         latitude: l.latitude ?? null,
         longitude: l.longitude ?? null,
         addressText: l.addressText ?? null,
@@ -155,8 +156,12 @@ router.get("/agents/:slug/listings", async (req, res) => {
         sizeSqft: l.sizeSqft ?? null,
         sizeSqm: l.sizeSqm ?? toSqm(l.sizeSqft),
 
+        // ✅ ADD assignedAgentId too (nice for frontend)
+        assignedAgentId: l.assignedAgentId ?? null,
+
         agent: l.assignedAgent
           ? {
+            id: l.assignedAgent.id, // ✅ ADD
             fullName: l.assignedAgent.fullName,
             slug: l.assignedAgent.slug,
             phone: l.assignedAgent.phone,
@@ -218,6 +223,7 @@ router.get("/listings", async (req, res) => {
         images: { orderBy: { order: "asc" } },
         assignedAgent: {
           select: {
+            id: true,               // ✅ ADD
             fullName: true,
             slug: true,
             phone: true,
@@ -245,7 +251,6 @@ router.get("/listings", async (req, res) => {
         developer: l.developerName || null,
         handover: l.completionYear ? `Handover by ${l.completionYear}` : null,
 
-        // ✅ MAP FIELDS (optional on cards)
         latitude: l.latitude ?? null,
         longitude: l.longitude ?? null,
         addressText: l.addressText ?? null,
@@ -261,8 +266,12 @@ router.get("/listings", async (req, res) => {
         sizeSqft: l.sizeSqft ?? null,
         sizeSqm: l.sizeSqm ?? toSqm(l.sizeSqft),
 
+        // ✅ IMPORTANT: expose agent id + assignedAgentId
+        assignedAgentId: l.assignedAgentId ?? null,
+
         agent: l.assignedAgent
           ? {
+            id: l.assignedAgent.id, // ✅ ADD
             fullName: l.assignedAgent.fullName,
             slug: l.assignedAgent.slug,
             phone: l.assignedAgent.phone,
@@ -292,6 +301,7 @@ router.get("/listings/:id", async (req, res) => {
         images: { orderBy: { order: "asc" } },
         assignedAgent: {
           select: {
+            id: true,               // ✅ ADD
             fullName: true,
             slug: true,
             email: true,
@@ -332,7 +342,6 @@ router.get("/listings/:id", async (req, res) => {
         currency: listing.currency,
         description: listing.description,
 
-        // ✅ MAP FIELDS (THIS IS THE FIX)
         latitude: listing.latitude ?? null,
         longitude: listing.longitude ?? null,
         addressText: listing.addressText ?? null,
@@ -351,8 +360,11 @@ router.get("/listings/:id", async (req, res) => {
           order: i.order,
         })),
 
+        assignedAgentId: listing.assignedAgentId ?? null,
+
         agent: listing.assignedAgent
           ? {
+            id: listing.assignedAgent.id, // ✅ ADD
             fullName: listing.assignedAgent.fullName,
             slug: listing.assignedAgent.slug,
             email: listing.assignedAgent.email,

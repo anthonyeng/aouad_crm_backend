@@ -75,7 +75,8 @@ router.patch("/clients/:id", async (req, res) => {
 
     const existing = await prisma.client.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: "Not found" });
-    if (existing.agentAssignedId !== agentId) return res.status(403).json({ error: "Forbidden" });
+    if (existing.agentAssignedId !== agentId)
+        return res.status(403).json({ error: "Forbidden" });
 
     const updated = await prisma.client.update({
         where: { id },
@@ -103,7 +104,7 @@ router.get("/listings", async (req, res) => {
 
 /* =========================
    POST /api/agent/listings
-   ✅ Auto-assign to logged-in agent (Karl => Karl)
+   ✅ Auto-assign + set createdById
 ========================= */
 const CreateListingSchema = z.object({
     title: z.string().min(2).max(180),
@@ -112,7 +113,9 @@ const CreateListingSchema = z.object({
     area: z.string().min(2).max(160),
 
     listingType: z.enum(["OFF_PLAN", "FOR_SALE", "FOR_RENT"]).default("OFF_PLAN"),
-    propertyType: z.enum(["APARTMENT", "VILLA", "TOWNHOUSE", "PENTHOUSE", "LAND"]).default("APARTMENT"),
+    propertyType: z
+        .enum(["APARTMENT", "VILLA", "TOWNHOUSE", "PENTHOUSE", "LAND"])
+        .default("APARTMENT"),
     category: z.enum(["OFF_PLAN", "READY", "SECONDARY"]).default("OFF_PLAN"),
 
     featured: z.boolean().optional().default(false),
@@ -142,17 +145,27 @@ router.post("/listings", async (req, res) => {
     const agentId = agentIdFromReq(req);
 
     const parsed = CreateListingSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "Invalid body", details: parsed.error.flatten() });
+    if (!parsed.success) {
+        return res
+            .status(400)
+            .json({ error: "Invalid body", details: parsed.error.flatten() });
+    }
 
-    // ✅ FORCE assignment, ignore any assignedAgentId coming from client
-    const created = await prisma.listing.create({
-        data: {
-            ...parsed.data,
-            assignedAgentId: agentId,
-        },
-    });
+    try {
+        // ✅ FORCE assignment + creator, ignore anything sent by the client
+        const created = await prisma.listing.create({
+            data: {
+                ...parsed.data,
+                createdById: agentId,
+                assignedAgentId: agentId,
+            },
+        });
 
-    res.json({ id: created.id });
+        res.json({ id: created.id });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to create listing" });
+    }
 });
 
 /* =========================
@@ -183,7 +196,8 @@ router.patch("/listings/:id", async (req, res) => {
 
     const existing = await prisma.listing.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: "Not found" });
-    if (existing.assignedAgentId !== agentId) return res.status(403).json({ error: "Forbidden" });
+    if (existing.assignedAgentId !== agentId)
+        return res.status(403).json({ error: "Forbidden" });
 
     // ✅ never allow changing assignedAgentId
     const { assignedAgentId, ...safe } = parsed.data;

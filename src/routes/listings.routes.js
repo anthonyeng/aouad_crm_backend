@@ -2,8 +2,7 @@
 const router = require("express").Router();
 const { z } = require("zod");
 const { prisma } = require("../lib/prisma");
-const { auth } = require("../middlewares/auth");
-const { requireRole } = require("../middlewares/requireRole");
+const { auth, requireRole } = require("../middlewares/auth");
 
 /* =========================
    Helpers
@@ -26,15 +25,21 @@ const toFloatOrNull = (v) => {
    Validation Schemas
    - accept numbers OR numeric strings (because forms)
 ========================= */
-const numIntOptional = z.union([z.number(), z.string()])
-  .transform((v) => (typeof v === "string" ? (v.trim() === "" ? null : Number(v)) : v))
+const numIntOptional = z
+  .union([z.number(), z.string()])
+  .transform((v) =>
+    typeof v === "string" ? (v.trim() === "" ? null : Number(v)) : v
+  )
   .refine((v) => v == null || Number.isFinite(v), "Must be a number")
   .transform((v) => (v == null ? null : Math.trunc(v)))
   .nullable()
   .optional();
 
-const numFloatOptional = z.union([z.number(), z.string()])
-  .transform((v) => (typeof v === "string" ? (v.trim() === "" ? null : Number(v)) : v))
+const numFloatOptional = z
+  .union([z.number(), z.string()])
+  .transform((v) =>
+    typeof v === "string" ? (v.trim() === "" ? null : Number(v)) : v
+  )
   .refine((v) => v == null || Number.isFinite(v), "Must be a number")
   .nullable()
   .optional();
@@ -49,8 +54,14 @@ const createListingSchema = z.object({
   country: z.string().trim().min(1).optional().nullable(),
 
   // ✅ Map location
-  latitude: numFloatOptional.refine((v) => v == null || (v >= -90 && v <= 90), "Latitude must be between -90 and 90"),
-  longitude: numFloatOptional.refine((v) => v == null || (v >= -180 && v <= 180), "Longitude must be between -180 and 180"),
+  latitude: numFloatOptional.refine(
+    (v) => v == null || (v >= -90 && v <= 90),
+    "Latitude must be between -90 and 90"
+  ),
+  longitude: numFloatOptional.refine(
+    (v) => v == null || (v >= -180 && v <= 180),
+    "Longitude must be between -180 and 180"
+  ),
   addressText: z.string().max(200).nullable().optional(),
 
   // CRM core (required in your DB model)
@@ -108,6 +119,7 @@ router.post("/", auth, async (req, res) => {
 
   const data = parsed.data;
 
+  // admin may assign, agent cannot (will become null)
   const assignedAgentId =
     req.user.role === "ADMIN" ? data.assignedAgentId ?? null : null;
 
@@ -157,7 +169,8 @@ router.post("/", auth, async (req, res) => {
         currency: data.currency ?? "USD",
         description: data.description ?? null,
 
-        createdById: req.user.sub,
+        // ✅ FIX: your auth normalizes req.user.id
+        createdById: req.user.id,
         assignedAgentId,
       },
       include: {
@@ -197,7 +210,12 @@ router.get("/", auth, async (req, res) => {
   const baseWhere =
     req.user.role === "ADMIN"
       ? {}
-      : { OR: [{ createdById: req.user.sub }, { assignedAgentId: req.user.sub }] };
+      : {
+        OR: [
+          { createdById: req.user.id },
+          { assignedAgentId: req.user.id },
+        ],
+      };
 
   const countryKey = country ? String(country).toLowerCase() : null;
 
@@ -249,8 +267,8 @@ router.patch("/:id", auth, async (req, res) => {
 
   const canEdit =
     req.user.role === "ADMIN" ||
-    existing.createdById === req.user.sub ||
-    existing.assignedAgentId === req.user.sub;
+    existing.createdById === req.user.id ||
+    existing.assignedAgentId === req.user.id;
 
   if (!canEdit) return res.status(403).json({ error: "Forbidden" });
 
@@ -266,7 +284,9 @@ router.patch("/:id", auth, async (req, res) => {
 
   // Normalize country if present
   if ("country" in incoming) {
-    incoming.country = incoming.country ? String(incoming.country).toLowerCase() : null;
+    incoming.country = incoming.country
+      ? String(incoming.country).toLowerCase()
+      : null;
   }
 
   // Convert numeric fields safely (because partial() may pass undefined)
@@ -299,7 +319,7 @@ router.patch("/:id", auth, async (req, res) => {
 });
 
 /* =========================
-   Hide / Unhide
+   Hide / Unhide (ADMIN)
 ========================= */
 router.post("/:id/hide", auth, requireRole("ADMIN"), async (req, res) => {
   const updated = await prisma.listing.update({
@@ -318,7 +338,7 @@ router.post("/:id/unhide", auth, requireRole("ADMIN"), async (req, res) => {
 });
 
 /* =========================
-   Soft Delete
+   Soft Delete (ADMIN)
 ========================= */
 router.delete("/:id", auth, requireRole("ADMIN"), async (req, res) => {
   await prisma.listing.update({
