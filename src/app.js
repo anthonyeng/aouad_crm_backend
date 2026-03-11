@@ -113,5 +113,5 @@ app.use("/api/agent", agentRoutes);
 app.get("/", (req, res) => {
    res.json({ ok: true, service: "aouad-crm-backend" });
 });
-
+app.use("/api/admin", require("./routes/admin.routes"));
 module.exports = { app };

@@ -24,6 +24,47 @@ router.get("/dashboard", async (req, res) => {
 });
 
 /* =========================
+   ADMIN: LISTING FEATURED ORDER
+========================= */
+
+const FeaturedOrderSchema = z.object({
+    featuredOrder: z.number().int().min(1),
+});
+
+router.patch("/listings/:id/featured-order", async (req, res) => {
+    try {
+        const id = String(req.params.id || "").trim();
+        if (!id) return res.status(400).json({ error: "Missing id" });
+
+        const payload = FeaturedOrderSchema.parse(req.body);
+
+        const item = await prisma.listing.update({
+            where: { id },
+            data: {
+                featured: true,
+                featuredOrder: payload.featuredOrder,
+            },
+        });
+
+        res.json({ item });
+    } catch (e) {
+        console.error(e);
+
+        if (e?.name === "ZodError") {
+            return res
+                .status(400)
+                .json({ error: e.errors?.[0]?.message || "Invalid payload" });
+        }
+
+        if (e?.code === "P2025") {
+            return res.status(404).json({ error: "Listing not found" });
+        }
+
+        res.status(500).json({ error: "Failed to update listing order" });
+    }
+});
+
+/* =========================
    ✅ ADMIN: CLIENT STORIES CRUD
    Base: /api/admin/client-stories
 ========================= */

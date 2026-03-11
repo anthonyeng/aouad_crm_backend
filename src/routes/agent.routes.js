@@ -8,7 +8,29 @@ const { auth, requireRole } = require("../middlewares/auth");
 
 // ✅ AGENT ONLY
 router.use(auth, requireRole("AGENT"));
+function hhmmToMinutes(hhmm) {
+    const [h, m] = String(hhmm || "00:00")
+        .split(":")
+        .map((x) => Number(x || 0));
+    return h * 60 + m;
+}
 
+function getDayOfWeekLocal(date) {
+    return new Date(date).getDay(); // 0..6
+}
+
+function getMinutesSinceMidnightLocal(date) {
+    const d = new Date(date);
+    return d.getHours() * 60 + d.getMinutes();
+}
+
+function addMinutes(date, minutes) {
+    return new Date(new Date(date).getTime() + minutes * 60 * 1000);
+}
+
+function rangesOverlap(aStart, aEnd, bStart, bEnd) {
+    return aStart < bEnd && bStart < aEnd;
+}
 function agentIdFromReq(req) {
     return req.user?.id;
 }
@@ -289,17 +311,52 @@ router.post("/change-password", async (req, res) => {
 /* =========================
    SCHEDULE
 ========================= */
-router.get("/schedule", async (req, res) => {
-    const agentId = agentIdFromReq(req);
+router.put("/schedule", async (req, res) => {
+    try {
+        const agentId = agentIdFromReq(req);
 
-    const rows = await prisma.agentSchedule.findMany({
-        where: { agentId },
-        orderBy: { dayOfWeek: "asc" },
-    });
+        const parsed = PutScheduleSchema.safeParse(req.body);
+        if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
 
-    res.json(rows);
+        const seen = new Set();
+
+        for (const row of parsed.data) {
+            if (seen.has(row.dayOfWeek)) {
+                return res.status(400).json({ error: "Duplicate weekday in schedule." });
+            }
+            seen.add(row.dayOfWeek);
+
+            const startMin = hhmmToMinutes(row.startHHMM);
+            const endMin = hhmmToMinutes(row.endHHMM);
+            const slotMin = Number(row.slotMin) || 30;
+
+            if (endMin <= startMin) {
+                return res.status(400).json({
+                    error: `End time must be after start time for day ${row.dayOfWeek}.`,
+                });
+            }
+
+            if ((endMin - startMin) < slotMin) {
+                return res.status(400).json({
+                    error: `Working hours must be at least one slot for day ${row.dayOfWeek}.`,
+                });
+            }
+        }
+
+        await prisma.agentSchedule.deleteMany({ where: { agentId } });
+
+        if (parsed.data.length) {
+            await prisma.agentSchedule.createMany({
+                data: parsed.data.map((x) => ({ ...x, agentId })),
+            });
+        }
+
+        res.json({ ok: true });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to save schedule" });
+    }
 });
-
 const PutScheduleSchema = z.array(
     z.object({
         dayOfWeek: z.number().int().min(0).max(6),
@@ -351,32 +408,113 @@ const CreateAppointmentSchema = z.object({
 });
 
 router.post("/appointments", async (req, res) => {
-    const agentId = agentIdFromReq(req);
+    try {
+        const agentId = agentIdFromReq(req);
 
-    const parsed = CreateAppointmentSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
+        const parsed = CreateAppointmentSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return res.status(400).json({ error: "Invalid body" });
+        }
 
-    const startAt = new Date(parsed.data.startAt);
-    if (Number.isNaN(startAt.getTime())) {
-        return res.status(400).json({ error: "Invalid startAt" });
+        const startAt = new Date(parsed.data.startAt);
+        if (Number.isNaN(startAt.getTime())) {
+            return res.status(400).json({ error: "Invalid startAt" });
+        }
+
+        const durationMin = Number(parsed.data.durationMin) || 30;
+        const endAt = addMinutes(startAt, durationMin);
+
+        const dayOfWeek = getDayOfWeekLocal(startAt);
+        const startMin = getMinutesSinceMidnightLocal(startAt);
+        const endMin = startMin + durationMin;
+
+        // 1) agent must have schedule for this weekday
+        const scheduleRow = await prisma.agentSchedule.findUnique({
+            where: {
+                agentId_dayOfWeek: {
+                    agentId,
+                    dayOfWeek,
+                },
+            },
+        });
+
+        if (!scheduleRow) {
+            return res.status(400).json({ error: "This day is not available." });
+        }
+
+        const scheduleStartMin = hhmmToMinutes(scheduleRow.startHHMM);
+        const scheduleEndMin = hhmmToMinutes(scheduleRow.endHHMM);
+
+        // 2) booking must be inside working hours
+        if (startMin < scheduleStartMin || endMin > scheduleEndMin) {
+            return res.status(400).json({ error: "Appointment is outside available hours." });
+        }
+
+        // 3) booking must respect slot size
+        const slotMin = Number(scheduleRow.slotMin) || 30;
+
+        if (durationMin !== slotMin) {
+            return res.status(400).json({
+                error: `Appointment duration must be exactly ${slotMin} minutes for this day.`,
+            });
+        }
+
+        if ((startMin - scheduleStartMin) % slotMin !== 0) {
+            return res.status(400).json({
+                error: "Appointment must start on a valid slot boundary.",
+            });
+        }
+
+        // 4) one user at a time: no overlap with existing active appointments
+        const sameDayStart = new Date(startAt);
+        sameDayStart.setHours(0, 0, 0, 0);
+
+        const sameDayEnd = new Date(startAt);
+        sameDayEnd.setHours(23, 59, 59, 999);
+
+        const existing = await prisma.appointment.findMany({
+            where: {
+                agentId,
+                status: {
+                    in: ["PENDING", "CONFIRMED"],
+                },
+                startAt: {
+                    gte: sameDayStart,
+                    lte: sameDayEnd,
+                },
+            },
+            orderBy: { startAt: "asc" },
+        });
+
+        const conflict = existing.find((appt) => {
+            const apptStart = new Date(appt.startAt);
+            const apptEnd = addMinutes(apptStart, appt.durationMin || 30);
+            return rangesOverlap(startAt, endAt, apptStart, apptEnd);
+        });
+
+        if (conflict) {
+            return res.status(409).json({ error: "This slot is already booked." });
+        }
+
+        const created = await prisma.appointment.create({
+            data: {
+                agentId,
+                startAt,
+                durationMin,
+                customerName: parsed.data.customerName,
+                customerPhone: parsed.data.customerPhone,
+                note: parsed.data.note || null,
+                source: parsed.data.source || "agent_panel",
+                status: "CONFIRMED",
+            },
+        });
+
+        res.json(created);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to create appointment" });
     }
-
-    const created = await prisma.appointment.create({
-        data: {
-            agentId,
-            startAt,
-            durationMin: parsed.data.durationMin,
-            customerName: parsed.data.customerName,
-            customerPhone: parsed.data.customerPhone,
-            note: parsed.data.note || null,
-            source: parsed.data.source || "agent_panel",
-            status: "CONFIRMED",
-        },
-    });
-
-    res.json(created);
 });
-
 /* =========================
    ✅ LEADS INBOX (MERGED)
    GET /api/agent/leads
@@ -723,5 +861,19 @@ router.post("/leads/manual", async (req, res) => {
         res.status(500).json({ error: "Failed to create lead" });
     }
 });
+router.get("/schedule", async (req, res) => {
+    try {
+        const agentId = agentIdFromReq(req);
 
+        const rows = await prisma.agentSchedule.findMany({
+            where: { agentId },
+            orderBy: { dayOfWeek: "asc" },
+        });
+
+        res.json(rows);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to load schedule" });
+    }
+});
 module.exports = router;
