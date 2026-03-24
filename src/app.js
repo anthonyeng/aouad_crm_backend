@@ -29,6 +29,9 @@ const agentRoutes = require("./routes/agent.routes");
 
 const app = express();
 
+const FRONTEND_URL = "https://aouad.co";
+const FALLBACK_IMAGE = `${FRONTEND_URL}/blacklogo.png`;
+
 function escapeHtml(value) {
    return String(value ?? "")
       .replace(/&/g, "&amp;")
@@ -53,23 +56,20 @@ function toAbsoluteUrl(url) {
    }
 
    if (trimmed.startsWith("/")) {
-      return `https://www.aouad.co${trimmed}`;
+      return `${FRONTEND_URL}${trimmed}`;
    }
 
    return trimmed;
 }
 
 function pickListingImage(item) {
-   // 1. use COVER image first
    const cover = item.images?.find((img) => img.isCover && img.url);
-   if (cover) return cover.url;
+   if (cover) return toAbsoluteUrl(cover.url);
 
-   // 2. fallback to first image
    const first = item.images?.find((img) => img.url);
-   if (first) return first.url;
+   if (first) return toAbsoluteUrl(first.url);
 
-   // 3. fallback
-   return "https://www.aouad.co/blacklogo.png";
+   return FALLBACK_IMAGE;
 }
 
 function buildListingDescription(item) {
@@ -116,7 +116,7 @@ app.get("/listing/:id", async (req, res) => {
       const id = String(req.params.id || "").trim();
 
       if (!id) {
-         return res.redirect("https://www.aouad.co/");
+         return res.redirect(FRONTEND_URL);
       }
 
       const item = await prisma.listing.findFirst({
@@ -131,10 +131,10 @@ app.get("/listing/:id", async (req, res) => {
       });
 
       if (!item) {
-         return res.redirect("https://www.aouad.co/");
+         return res.redirect(FRONTEND_URL);
       }
 
-      const frontendUrl = `https://www.aouad.co/listing/${encodeURIComponent(id)}`;
+      const frontendUrl = `${FRONTEND_URL}/listing/${encodeURIComponent(id)}`;
       const title = escapeHtml(item.title || "Property Listing");
       const desc = escapeHtml(buildListingDescription(item));
       const image = escapeHtml(pickListingImage(item));
@@ -152,12 +152,11 @@ app.get("/listing/:id", async (req, res) => {
   <link rel="canonical" href="${url}" />
 
   <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="AOUAD. Real Estate" />
+  <meta property="og:site_name" content="Aouad Real Estate" />
   <meta property="og:title" content="${title}" />
   <meta property="og:description" content="${desc}" />
   <meta property="og:image" content="${image}" />
   <meta property="og:image:secure_url" content="${image}" />
-  <meta property="og:image:type" content="image/jpeg" />
   <meta property="og:url" content="${url}" />
 
   <meta name="twitter:card" content="summary_large_image" />
@@ -173,7 +172,7 @@ app.get("/listing/:id", async (req, res) => {
 </html>`);
    } catch (e) {
       console.error("Listing OG route error:", e);
-      return res.redirect("https://www.aouad.co/");
+      return res.redirect(FRONTEND_URL);
    }
 });
 
