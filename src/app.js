@@ -1,21 +1,21 @@
-// src/app.js
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const path = require("path");
 const { prisma } = require("./lib/prisma");
+
 const authRoutes = require("./routes/auth.routes");
 const listingsRoutes = require("./routes/listings.routes");
 const uploadsRoutes = require("./routes/uploads.routes");
 const usersRoutes = require("./routes/users.routes");
 const publicRoutes = require("./routes/public.routes");
 
-// ✅ LEADS
+// LEADS
 const leadsRoutes = require("./routes/leads.routes");
 const publicLeadsRoutes = require("./routes/public.leads.routes");
 
-// ✅ NEW: public booking (availability + book appointment)
+// public booking
 const publicBookingRoutes = require("./routes/public.booking.routes");
 
 // ADMIN routes
@@ -34,6 +34,43 @@ const publicListingsRoutes = require("./routes/public.listings.routes");
 const agentRoutes = require("./routes/agent.routes");
 
 const app = express();
+
+function escapeHtml(value) {
+   return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+}
+
+function pickListingImage(item) {
+   return (
+      item.mainImageUrl ||
+      item.coverImageUrl ||
+      item.thumbnailUrl ||
+      item.images?.[0]?.url ||
+      item.images?.[0]?.imageUrl ||
+      item.images?.[0]?.src ||
+      item.images?.[0]?.publicUrl ||
+      "https://www.aouad.co/blacklogo.png"
+   );
+}
+
+function buildListingDescription(item) {
+   const parts = [];
+
+   if (item.city) parts.push(item.city);
+   if (item.area) parts.push(item.area);
+   if (item.community) parts.push(item.community);
+   if (item.projectName) parts.push(item.projectName);
+
+   if (item.price) {
+      parts.push(`$${item.price}`);
+   }
+
+   return parts.join(" • ") || "View this property on Aouad Real Estate";
+}
 
 /* =========================
    MIDDLEWARE
@@ -60,63 +97,18 @@ app.get("/api/health", (req, res) => res.json({ ok: true }));
 app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
 /* =========================
-   PUBLIC (NO AUTH)
+   LISTING OG PREVIEW ROUTE
+   IMPORTANT:
+   Frontend Render rewrite must send:
+   /listing/* -> https://aouad-crm-backend.onrender.com/listing/:splat
 ========================= */
-// order matters
-app.use("/api/public", publicClientStoriesRoutes);
-app.use("/api/public", publicDevelopersRoutes);
-app.use("/api/public", publicCareersRoutes);
-app.use("/api/public", publicListingsRoutes);
-app.use("/api/public", publicRoutes);
-
-// ✅ public lead capture (schedule call, forms)
-app.use("/api/public", publicLeadsRoutes);
-
-// ✅ public booking (availability + book)
-app.use("/api/public", publicBookingRoutes);
-
-/* =========================
-   AUTH
-========================= */
-app.use("/api/auth", authRoutes);
-
-/* =========================
-   CORE
-========================= */
-app.use("/api/listings", listingsRoutes);
-app.use("/api/users", usersRoutes);
-
-// ✅ lead management (admin / agent)
-app.use("/api/leads", leadsRoutes);
-
-/* =========================
-   UPLOADS
-========================= */
-app.use("/api/uploads", uploadsRoutes);
-
-/* =========================
-   ADMIN
-========================= */
-app.use("/api/admin", adminClientsRoutes);
-app.use("/api/admin", adminDevelopersRoutes);
-app.use("/api/admin", adminCareersRoutes);
-app.use("/api/admin", adminClientStoriesRoutes);
-
-/* =========================
-   AGENT
-========================= */
-app.use("/api/agent", agentRoutes);
-
-/* =========================
-   ROOT
-========================= */
-app.get("/", (req, res) => {
-   res.json({ ok: true, service: "aouad-crm-backend" });
-});
-app.use("/api/admin", require("./routes/admin.routes"));
 app.get("/listing/:id", async (req, res) => {
    try {
       const id = String(req.params.id || "").trim();
+
+      if (!id) {
+         return res.redirect("https://www.aouad.co/");
+      }
 
       const item = await prisma.listing.findFirst({
          where: {
@@ -133,42 +125,101 @@ app.get("/listing/:id", async (req, res) => {
          return res.redirect("https://www.aouad.co/");
       }
 
-      const image =
-         item.mainImageUrl ||
-         item.coverImageUrl ||
-         item.images?.[0]?.url ||
-         "https://www.aouad.co/blacklogo.png";
+      const frontendUrl = `https://www.aouad.co/listing/${encodeURIComponent(id)}`;
+      const title = escapeHtml(item.title || "Property Listing");
+      const desc = escapeHtml(buildListingDescription(item));
+      const image = escapeHtml(pickListingImage(item));
+      const url = escapeHtml(frontendUrl);
 
-      const title = item.title || "Property Listing";
-      const desc =
-         `${item.city || ""} ${item.area || ""}`.trim() ||
-         "View this property on Aouad Real Estate";
+      res.set("Content-Type", "text/html; charset=utf-8");
 
-      return res.send(`
-<!doctype html>
-<html>
+      return res.send(`<!doctype html>
+<html lang="en">
 <head>
-<meta property="og:title" content="${title}" />
-<meta property="og:description" content="${desc}" />
-<meta property="og:image" content="${image}" />
-<meta property="og:url" content="https://www.aouad.co/listing/${id}" />
-<meta property="og:type" content="website" />
+  <meta charset="UTF-8" />
+  <title>${title}</title>
 
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="${title}" />
-<meta name="twitter:description" content="${desc}" />
-<meta name="twitter:image" content="${image}" />
+  <meta name="description" content="${desc}" />
+  <link rel="canonical" href="${url}" />
 
-<script>
-  window.location.href = "https://www.aouad.co/listing/${id}";
-</script>
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="AOUAD. Real Estate" />
+  <meta property="og:title" content="${title}" />
+  <meta property="og:description" content="${desc}" />
+  <meta property="og:image" content="${image}" />
+  <meta property="og:url" content="${url}" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${title}" />
+  <meta name="twitter:description" content="${desc}" />
+  <meta name="twitter:image" content="${image}" />
+
+  <meta http-equiv="refresh" content="0; url=${url}" />
 </head>
-<body></body>
-</html>
-      `);
+<body>
+  Redirecting...
+</body>
+</html>`);
    } catch (e) {
-      console.error(e);
+      console.error("Listing OG route error:", e);
       return res.redirect("https://www.aouad.co/");
    }
 });
+
+/* =========================
+   PUBLIC (NO AUTH)
+========================= */
+// order matters
+app.use("/api/public", publicClientStoriesRoutes);
+app.use("/api/public", publicDevelopersRoutes);
+app.use("/api/public", publicCareersRoutes);
+app.use("/api/public", publicListingsRoutes);
+app.use("/api/public", publicRoutes);
+
+// public lead capture
+app.use("/api/public", publicLeadsRoutes);
+
+// public booking
+app.use("/api/public", publicBookingRoutes);
+
+/* =========================
+   AUTH
+========================= */
+app.use("/api/auth", authRoutes);
+
+/* =========================
+   CORE
+========================= */
+app.use("/api/listings", listingsRoutes);
+app.use("/api/users", usersRoutes);
+
+// lead management
+app.use("/api/leads", leadsRoutes);
+
+/* =========================
+   UPLOADS
+========================= */
+app.use("/api/uploads", uploadsRoutes);
+
+/* =========================
+   ADMIN
+========================= */
+app.use("/api/admin", adminClientsRoutes);
+app.use("/api/admin", adminDevelopersRoutes);
+app.use("/api/admin", adminCareersRoutes);
+app.use("/api/admin", adminClientStoriesRoutes);
+app.use("/api/admin", require("./routes/admin.routes"));
+
+/* =========================
+   AGENT
+========================= */
+app.use("/api/agent", agentRoutes);
+
+/* =========================
+   ROOT
+========================= */
+app.get("/", (req, res) => {
+   res.json({ ok: true, service: "aouad-crm-backend" });
+});
+
 module.exports = { app };
