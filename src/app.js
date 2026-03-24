@@ -4,7 +4,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const path = require("path");
-
+const { prisma } = require("./lib/prisma");
 const authRoutes = require("./routes/auth.routes");
 const listingsRoutes = require("./routes/listings.routes");
 const uploadsRoutes = require("./routes/uploads.routes");
