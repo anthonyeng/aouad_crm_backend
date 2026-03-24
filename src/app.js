@@ -11,26 +11,20 @@ const uploadsRoutes = require("./routes/uploads.routes");
 const usersRoutes = require("./routes/users.routes");
 const publicRoutes = require("./routes/public.routes");
 
-// LEADS
 const leadsRoutes = require("./routes/leads.routes");
 const publicLeadsRoutes = require("./routes/public.leads.routes");
-
-// public booking
 const publicBookingRoutes = require("./routes/public.booking.routes");
 
-// ADMIN routes
 const adminClientsRoutes = require("./routes/admin.clients.routes");
 const adminDevelopersRoutes = require("./routes/admin.developers.routes");
 const adminCareersRoutes = require("./routes/admin.careers.routes");
 const adminClientStoriesRoutes = require("./routes/admin.clientStories.routes");
 
-// PUBLIC routes
 const publicDevelopersRoutes = require("./routes/public.developers.routes");
 const publicCareersRoutes = require("./routes/public.careers.routes");
 const publicClientStoriesRoutes = require("./routes/public.clientStories.routes");
 const publicListingsRoutes = require("./routes/public.listings.routes");
 
-// AGENT routes
 const agentRoutes = require("./routes/agent.routes");
 
 const app = express();
@@ -44,8 +38,29 @@ function escapeHtml(value) {
       .replace(/'/g, "&#39;");
 }
 
+function toAbsoluteUrl(url) {
+   if (!url) return null;
+
+   const trimmed = String(url).trim();
+   if (!trimmed) return null;
+
+   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+      return trimmed;
+   }
+
+   if (trimmed.startsWith("/uploads/")) {
+      return `https://aouad-crm-backend.onrender.com${trimmed}`;
+   }
+
+   if (trimmed.startsWith("/")) {
+      return `https://www.aouad.co${trimmed}`;
+   }
+
+   return trimmed;
+}
+
 function pickListingImage(item) {
-   return (
+   const raw =
       item.mainImageUrl ||
       item.coverImageUrl ||
       item.thumbnailUrl ||
@@ -53,21 +68,19 @@ function pickListingImage(item) {
       item.images?.[0]?.imageUrl ||
       item.images?.[0]?.src ||
       item.images?.[0]?.publicUrl ||
-      "https://www.aouad.co/blacklogo.png"
-   );
+      "/blacklogo.png";
+
+   return toAbsoluteUrl(raw) || "https://www.aouad.co/blacklogo.png";
 }
 
 function buildListingDescription(item) {
    const parts = [];
 
+   if (item.country) parts.push(item.country);
    if (item.city) parts.push(item.city);
    if (item.area) parts.push(item.area);
    if (item.community) parts.push(item.community);
    if (item.projectName) parts.push(item.projectName);
-
-   if (item.price) {
-      parts.push(`$${item.price}`);
-   }
 
    return parts.join(" • ") || "View this property on Aouad Real Estate";
 }
@@ -98,9 +111,6 @@ app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
 /* =========================
    LISTING OG PREVIEW ROUTE
-   IMPORTANT:
-   Frontend Render rewrite must send:
-   /listing/* -> https://aouad-crm-backend.onrender.com/listing/:splat
 ========================= */
 app.get("/listing/:id", async (req, res) => {
    try {
@@ -147,6 +157,8 @@ app.get("/listing/:id", async (req, res) => {
   <meta property="og:title" content="${title}" />
   <meta property="og:description" content="${desc}" />
   <meta property="og:image" content="${image}" />
+  <meta property="og:image:secure_url" content="${image}" />
+  <meta property="og:image:type" content="image/jpeg" />
   <meta property="og:url" content="${url}" />
 
   <meta name="twitter:card" content="summary_large_image" />
@@ -169,17 +181,12 @@ app.get("/listing/:id", async (req, res) => {
 /* =========================
    PUBLIC (NO AUTH)
 ========================= */
-// order matters
 app.use("/api/public", publicClientStoriesRoutes);
 app.use("/api/public", publicDevelopersRoutes);
 app.use("/api/public", publicCareersRoutes);
 app.use("/api/public", publicListingsRoutes);
 app.use("/api/public", publicRoutes);
-
-// public lead capture
 app.use("/api/public", publicLeadsRoutes);
-
-// public booking
 app.use("/api/public", publicBookingRoutes);
 
 /* =========================
@@ -192,8 +199,6 @@ app.use("/api/auth", authRoutes);
 ========================= */
 app.use("/api/listings", listingsRoutes);
 app.use("/api/users", usersRoutes);
-
-// lead management
 app.use("/api/leads", leadsRoutes);
 
 /* =========================
