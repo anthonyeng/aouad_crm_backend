@@ -114,4 +114,61 @@ app.get("/", (req, res) => {
    res.json({ ok: true, service: "aouad-crm-backend" });
 });
 app.use("/api/admin", require("./routes/admin.routes"));
+app.get("/listing/:id", async (req, res) => {
+   try {
+      const id = String(req.params.id || "").trim();
+
+      const item = await prisma.listing.findFirst({
+         where: {
+            id,
+            deletedAt: null,
+            isHidden: false,
+         },
+         include: {
+            images: { orderBy: { order: "asc" } },
+         },
+      });
+
+      if (!item) {
+         return res.redirect("https://www.aouad.co/");
+      }
+
+      const image =
+         item.mainImageUrl ||
+         item.coverImageUrl ||
+         item.images?.[0]?.url ||
+         "https://www.aouad.co/blacklogo.png";
+
+      const title = item.title || "Property Listing";
+      const desc =
+         `${item.city || ""} ${item.area || ""}`.trim() ||
+         "View this property on Aouad Real Estate";
+
+      return res.send(`
+<!doctype html>
+<html>
+<head>
+<meta property="og:title" content="${title}" />
+<meta property="og:description" content="${desc}" />
+<meta property="og:image" content="${image}" />
+<meta property="og:url" content="https://www.aouad.co/listing/${id}" />
+<meta property="og:type" content="website" />
+
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="${title}" />
+<meta name="twitter:description" content="${desc}" />
+<meta name="twitter:image" content="${image}" />
+
+<script>
+  window.location.href = "https://www.aouad.co/listing/${id}";
+</script>
+</head>
+<body></body>
+</html>
+      `);
+   } catch (e) {
+      console.error(e);
+      return res.redirect("https://www.aouad.co/");
+   }
+});
 module.exports = { app };
