@@ -60,17 +60,16 @@ function toAbsoluteUrl(url) {
 }
 
 function pickListingImage(item) {
-   const raw =
-      item.mainImageUrl ||
-      item.coverImageUrl ||
-      item.thumbnailUrl ||
-      item.images?.[0]?.url ||
-      item.images?.[0]?.imageUrl ||
-      item.images?.[0]?.src ||
-      item.images?.[0]?.publicUrl ||
-      "/blacklogo.png";
+   // 1. use COVER image first
+   const cover = item.images?.find((img) => img.isCover && img.url);
+   if (cover) return cover.url;
 
-   return toAbsoluteUrl(raw) || "https://www.aouad.co/blacklogo.png";
+   // 2. fallback to first image
+   const first = item.images?.find((img) => img.url);
+   if (first) return first.url;
+
+   // 3. fallback
+   return "https://www.aouad.co/blacklogo.png";
 }
 
 function buildListingDescription(item) {
