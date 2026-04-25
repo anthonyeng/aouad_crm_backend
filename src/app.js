@@ -119,6 +119,25 @@ app.get("/listing/:id", async (req, res) => {
          return res.redirect(FRONTEND_URL);
       }
 
+      // Detect link-preview bots (WhatsApp, Telegram, Slack, Facebook, etc.)
+      const ua = req.headers["user-agent"] || "";
+      const isBot = /WhatsApp|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot|Applebot|Google|bot|crawler|spider/i.test(ua);
+
+      // Regular browser — send them straight to the SPA via the root
+      // (avoids rewrite loop: browser navigates to / which is not rewritten,
+      //  then the SPA's sessionStorage handler redirects to /listing/:id)
+      if (!isBot) {
+         res.set("Content-Type", "text/html; charset=utf-8");
+         return res.send(`<!doctype html>
+<html><head><meta charset="UTF-8" /></head>
+<body>
+<script>
+  sessionStorage.setItem('_goto_listing', ${JSON.stringify(id)});
+  window.location.replace('/');
+</script>
+</body></html>`);
+      }
+
       const item = await prisma.listing.findFirst({
          where: {
             id,
@@ -163,12 +182,8 @@ app.get("/listing/:id", async (req, res) => {
   <meta name="twitter:title" content="${title}" />
   <meta name="twitter:description" content="${desc}" />
   <meta name="twitter:image" content="${image}" />
-
-  <meta http-equiv="refresh" content="0; url=${url}" />
 </head>
-<body>
-  Redirecting...
-</body>
+<body></body>
 </html>`);
    } catch (e) {
       console.error("Listing OG route error:", e);
