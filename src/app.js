@@ -156,6 +156,7 @@ app.get("/listing/:id", async (req, res) => {
 
   <meta name="description" content="${desc}" />
   <link rel="canonical" href="${url}" />
+  <meta http-equiv="refresh" content="0;url=${url}" />
 
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Aouad Real Estate" />
@@ -171,9 +172,6 @@ app.get("/listing/:id", async (req, res) => {
   <meta name="twitter:image" content="${image}" />
 </head>
 <body>
-<script>
-  window.location.replace(${JSON.stringify(frontendUrl)});
-</script>
 </body>
 </html>`);
    } catch (e) {
