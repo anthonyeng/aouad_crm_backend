@@ -172,8 +172,7 @@ app.get("/listing/:id", async (req, res) => {
 </head>
 <body>
 <script>
-  sessionStorage.setItem('_goto_listing', ${JSON.stringify(id)});
-  window.location.replace('/');
+  window.location.replace(${JSON.stringify(frontendUrl)});
 </script>
 </body>
 </html>`);
