@@ -119,28 +119,6 @@ app.get("/listing/:id", async (req, res) => {
          return res.redirect(FRONTEND_URL);
       }
 
-      // Detect link-preview bots (WhatsApp, Telegram, Slack, Facebook, etc.)
-      const ua = req.headers["user-agent"] || "";
-      const isBot = /WhatsApp|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot|Applebot|Google|bot|crawler|spider/i.test(ua);
-
-      // Regular browser — send them straight to the SPA via the root
-      // (avoids rewrite loop: browser navigates to / which is not rewritten,
-      //  then the SPA's sessionStorage handler redirects to /listing/:id)
-      if (!isBot) {
-         res.set({
-            "Content-Type": "text/html; charset=utf-8",
-            "Cache-Control": "no-store",
-         });
-         return res.send(`<!doctype html>
-<html><head><meta charset="UTF-8" /></head>
-<body>
-<script>
-  sessionStorage.setItem('_goto_listing', ${JSON.stringify(id)});
-  window.location.replace('/');
-</script>
-</body></html>`);
-      }
-
       const item = await prisma.listing.findFirst({
          where: {
             id,
@@ -162,6 +140,9 @@ app.get("/listing/:id", async (req, res) => {
       const image = escapeHtml(pickListingImage(item));
       const url = escapeHtml(frontendUrl);
 
+      // Always serve OG tags + JS redirect for browsers.
+      // Bots (WhatsApp, opengraph scrapers, etc.) read the <head> OG tags and
+      // ignore the <script>. Browsers execute the script and land on the SPA.
       res.set({
          "Content-Type": "text/html; charset=utf-8",
          "Cache-Control": "no-store",
@@ -189,7 +170,12 @@ app.get("/listing/:id", async (req, res) => {
   <meta name="twitter:description" content="${desc}" />
   <meta name="twitter:image" content="${image}" />
 </head>
-<body></body>
+<body>
+<script>
+  sessionStorage.setItem('_goto_listing', ${JSON.stringify(id)});
+  window.location.replace('/');
+</script>
+</body>
 </html>`);
    } catch (e) {
       console.error("Listing OG route error:", e);
