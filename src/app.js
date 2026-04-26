@@ -127,7 +127,10 @@ app.get("/listing/:id", async (req, res) => {
       // (avoids rewrite loop: browser navigates to / which is not rewritten,
       //  then the SPA's sessionStorage handler redirects to /listing/:id)
       if (!isBot) {
-         res.set("Content-Type", "text/html; charset=utf-8");
+         res.set({
+            "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": "no-store",
+         });
          return res.send(`<!doctype html>
 <html><head><meta charset="UTF-8" /></head>
 <body>
@@ -159,7 +162,10 @@ app.get("/listing/:id", async (req, res) => {
       const image = escapeHtml(pickListingImage(item));
       const url = escapeHtml(frontendUrl);
 
-      res.set("Content-Type", "text/html; charset=utf-8");
+      res.set({
+         "Content-Type": "text/html; charset=utf-8",
+         "Cache-Control": "no-store",
+      });
 
       return res.send(`<!doctype html>
 <html lang="en">
