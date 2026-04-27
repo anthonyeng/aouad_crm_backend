@@ -126,11 +126,11 @@ app.get("/og-image/:id", async (req, res) => {
          return res.redirect(FALLBACK_IMAGE);
       }
 
-      const axios = require("axios");
-      const response = await axios.get(imageUrl, { responseType: "stream", timeout: 10000 });
-      res.set("Content-Type", response.headers["content-type"] || "image/jpeg");
-      res.set("Cache-Control", "public, max-age=86400");
-      response.data.pipe(res);
+      // Redirect to the actual image with ?og=1 appended.
+      // This gives WhatsApp a URL it has never cached, so it fetches fresh,
+      // while keeping the actual download direct from the CDN (fast).
+      const sep = imageUrl.includes("?") ? "&" : "?";
+      return res.redirect(302, `${imageUrl}${sep}og=1`);
    } catch (e) {
       console.error("og-image proxy error:", e.message);
       return res.redirect(FALLBACK_IMAGE);
