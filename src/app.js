@@ -166,7 +166,8 @@ app.get("/listing/:id", async (req, res) => {
       const frontendUrl = `${FRONTEND_URL}/listing/${encodeURIComponent(id)}`;
       const title = escapeHtml(item.title || "Property Listing");
       const desc = escapeHtml(buildListingDescription(item));
-      const proxyImage = escapeHtml(`https://${req.headers.host}/og-image/${id}`);
+      const imgV = req.query.v ? `?v=${encodeURIComponent(req.query.v)}` : "";
+      const proxyImage = escapeHtml(`https://${req.headers.host}/og-image/${id}${imgV}`);
       const url = escapeHtml(frontendUrl);
 
       // Always serve OG tags + JS redirect for browsers.
