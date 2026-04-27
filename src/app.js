@@ -109,6 +109,35 @@ app.get("/api/health", (req, res) => res.json({ ok: true }));
 app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
 /* =========================
+   OG IMAGE PROXY
+   Proxies listing cover image through our own domain so WhatsApp's bot
+   fetches from a URL it hasn't cached before.
+========================= */
+app.get("/og-image/:id", async (req, res) => {
+   try {
+      const id = String(req.params.id || "").trim();
+      const item = await prisma.listing.findFirst({
+         where: { id, deletedAt: null },
+         include: { images: { orderBy: { order: "asc" } } },
+      });
+
+      const imageUrl = pickListingImage(item);
+      if (!imageUrl || imageUrl === FALLBACK_IMAGE) {
+         return res.redirect(FALLBACK_IMAGE);
+      }
+
+      const axios = require("axios");
+      const response = await axios.get(imageUrl, { responseType: "stream", timeout: 10000 });
+      res.set("Content-Type", response.headers["content-type"] || "image/jpeg");
+      res.set("Cache-Control", "public, max-age=86400");
+      response.data.pipe(res);
+   } catch (e) {
+      console.error("og-image proxy error:", e.message);
+      return res.redirect(FALLBACK_IMAGE);
+   }
+});
+
+/* =========================
    LISTING OG PREVIEW ROUTE
 ========================= */
 app.get("/listing/:id", async (req, res) => {
@@ -137,7 +166,7 @@ app.get("/listing/:id", async (req, res) => {
       const frontendUrl = `${FRONTEND_URL}/listing/${encodeURIComponent(id)}`;
       const title = escapeHtml(item.title || "Property Listing");
       const desc = escapeHtml(buildListingDescription(item));
-      const image = escapeHtml(pickListingImage(item));
+      const proxyImage = escapeHtml(`https://${req.headers.host}/og-image/${id}`);
       const url = escapeHtml(frontendUrl);
 
       // Always serve OG tags + JS redirect for browsers.
@@ -162,17 +191,16 @@ app.get("/listing/:id", async (req, res) => {
   <meta property="og:site_name" content="Aouad Real Estate" />
   <meta property="og:title" content="${title}" />
   <meta property="og:description" content="${desc}" />
-  <meta property="og:image" content="${image}" />
-  <meta property="og:image:secure_url" content="${image}" />
+  <meta property="og:image" content="${proxyImage}" />
+  <meta property="og:image:secure_url" content="${proxyImage}" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="800" />
-  <meta property="og:image:type" content="image/png" />
   <meta property="og:url" content="${url}" />
 
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${title}" />
   <meta name="twitter:description" content="${desc}" />
-  <meta name="twitter:image" content="${image}" />
+  <meta name="twitter:image" content="${proxyImage}" />
 </head>
 <body>
 </body>
