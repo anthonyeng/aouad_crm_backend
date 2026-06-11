@@ -861,6 +861,78 @@ router.post("/leads/manual", async (req, res) => {
         res.status(500).json({ error: "Failed to create lead" });
     }
 });
+/* =========================
+   SELL REQUESTS
+========================= */
+router.get("/sell-requests", async (req, res) => {
+    try {
+        const agentId = agentIdFromReq(req);
+        const limit = Math.min(Number(req.query.limit || 200), 500);
+
+        const items = await prisma.sellRequest.findMany({
+            where: { assignedAgentId: agentId },
+            take: limit,
+            orderBy: { createdAt: "desc" },
+        });
+
+        res.json({ items });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to load sell requests" });
+    }
+});
+
+const PatchSellRequestSchema = z.object({
+    status: z.enum(["NEW", "CONTACTED", "IN_PROGRESS", "CLOSED"]).optional(),
+    note: z.string().max(4000).optional().nullable(),
+});
+
+router.patch("/sell-requests/:id", async (req, res) => {
+    try {
+        const agentId = agentIdFromReq(req);
+        const id = req.params.id;
+
+        const parsed = PatchSellRequestSchema.safeParse(req.body);
+        if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
+
+        const existing = await prisma.sellRequest.findUnique({ where: { id } });
+        if (!existing) return res.status(404).json({ error: "Not found" });
+        if (existing.assignedAgentId !== agentId)
+            return res.status(403).json({ error: "Forbidden" });
+
+        const updated = await prisma.sellRequest.update({
+            where: { id },
+            data: {
+                status: parsed.data.status ?? undefined,
+                note: parsed.data.note ?? undefined,
+            },
+        });
+
+        res.json({ item: updated });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to update sell request" });
+    }
+});
+
+router.delete("/sell-requests/:id", async (req, res) => {
+    try {
+        const agentId = agentIdFromReq(req);
+        const id = req.params.id;
+
+        const existing = await prisma.sellRequest.findUnique({ where: { id } });
+        if (!existing) return res.status(404).json({ error: "Not found" });
+        if (existing.assignedAgentId !== agentId)
+            return res.status(403).json({ error: "Forbidden" });
+
+        await prisma.sellRequest.delete({ where: { id } });
+        res.json({ ok: true });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Failed to delete sell request" });
+    }
+});
+
 router.get("/schedule", async (req, res) => {
     try {
         const agentId = agentIdFromReq(req);

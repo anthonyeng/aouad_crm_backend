@@ -468,4 +468,63 @@ router.get("/listings/:id", async (req, res) => {
   }
 });
 
+/* =========================
+   ✅ PUBLIC: SELL REQUESTS
+   POST /api/public/sell-request
+========================= */
+const SellRequestSchema = z.object({
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().min(6),
+  phoneCode: z.string().optional(),
+  propertyType: z.string().min(1),
+  propertyLocation: z.string().min(1),
+  details: z.string().optional().or(z.literal("")),
+  pageUrl: z.string().optional(),
+});
+
+router.post("/sell-request", async (req, res) => {
+  try {
+    const parsed = SellRequestSchema.parse(req.body);
+
+    // assign to first active agent (owner) by sortOrder
+    const firstAgent = await prisma.user.findFirst({
+      where: { role: "AGENT", isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { fullName: "asc" }],
+      select: { id: true },
+    });
+
+    const sellRequest = await prisma.sellRequest.create({
+      data: {
+        firstName: parsed.firstName,
+        lastName: parsed.lastName,
+        email: parsed.email || null,
+        phone: parsed.phone,
+        phoneCode: parsed.phoneCode || "+961",
+        propertyType: parsed.propertyType,
+        propertyLocation: parsed.propertyLocation,
+        details: parsed.details || null,
+        status: "NEW",
+        assignedAgentId: firstAgent?.id || null,
+        pageUrl: parsed.pageUrl || null,
+        userAgent: req.get("user-agent") || null,
+        ip: (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "")
+          .toString()
+          .slice(0, 64),
+      },
+    });
+
+    res.json({ ok: true, id: sellRequest.id });
+  } catch (err) {
+    console.error(err);
+    if (err?.name === "ZodError") {
+      return res
+        .status(400)
+        .json({ error: err.errors?.[0]?.message || "Invalid payload" });
+    }
+    res.status(500).json({ error: "Failed to submit sell request" });
+  }
+});
+
 module.exports = router;

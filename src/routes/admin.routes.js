@@ -24,6 +24,52 @@ router.get("/dashboard", async (req, res) => {
 });
 
 /* =========================
+   ADMIN: PAGE VIEW STATS
+========================= */
+router.get("/pageviews", async (req, res) => {
+    try {
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const weekStart = new Date(todayStart);
+        weekStart.setDate(weekStart.getDate() - 7);
+        const monthStart = new Date(todayStart);
+        monthStart.setDate(monthStart.getDate() - 30);
+
+        const [total, today, week, month, topPages, daily] = await Promise.all([
+            prisma.pageView.count(),
+            prisma.pageView.count({ where: { createdAt: { gte: todayStart } } }),
+            prisma.pageView.count({ where: { createdAt: { gte: weekStart } } }),
+            prisma.pageView.count({ where: { createdAt: { gte: monthStart } } }),
+            prisma.pageView.groupBy({
+                by: ["path"],
+                _count: { path: true },
+                orderBy: { _count: { path: "desc" } },
+                take: 10,
+            }),
+            prisma.$queryRaw`
+                SELECT DATE(\"createdAt\") as date, COUNT(*)::int as count
+                FROM "PageView"
+                WHERE "createdAt" >= ${monthStart}
+                GROUP BY DATE("createdAt")
+                ORDER BY date ASC
+            `,
+        ]);
+
+        res.json({
+            total,
+            today,
+            week,
+            month,
+            topPages: topPages.map((p) => ({ path: p.path, count: p._count.path })),
+            daily,
+        });
+    } catch (e) {
+        console.error("pageviews stats error:", e);
+        res.status(500).json({ error: "Failed to load pageview stats" });
+    }
+});
+
+/* =========================
    ADMIN: LISTING FEATURED ORDER
 ========================= */
 

@@ -24,6 +24,7 @@ const publicDevelopersRoutes = require("./routes/public.developers.routes");
 const publicCareersRoutes = require("./routes/public.careers.routes");
 const publicClientStoriesRoutes = require("./routes/public.clientStories.routes");
 const publicListingsRoutes = require("./routes/public.listings.routes");
+const publicPageviewsRoutes = require("./routes/public.pageviews.routes");
 
 const agentRoutes = require("./routes/agent.routes");
 
@@ -222,6 +223,7 @@ app.use("/api/public", publicListingsRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/public", publicLeadsRoutes);
 app.use("/api/public", publicBookingRoutes);
+app.use("/api/public", publicPageviewsRoutes);
 
 /* =========================
    AUTH
