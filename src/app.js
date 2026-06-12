@@ -26,6 +26,9 @@ const publicClientStoriesRoutes = require("./routes/public.clientStories.routes"
 const publicListingsRoutes = require("./routes/public.listings.routes");
 const publicPageviewsRoutes = require("./routes/public.pageviews.routes");
 
+const adminExhibitionsRoutes = require("./routes/admin.exhibitions.routes");
+const publicExhibitionsRoutes = require("./routes/public.exhibitions.routes");
+
 const agentRoutes = require("./routes/agent.routes");
 
 const app = express();
@@ -224,6 +227,7 @@ app.use("/api/public", publicRoutes);
 app.use("/api/public", publicLeadsRoutes);
 app.use("/api/public", publicBookingRoutes);
 app.use("/api/public", publicPageviewsRoutes);
+app.use("/api/public", publicExhibitionsRoutes);
 
 /* =========================
    AUTH
@@ -250,6 +254,7 @@ app.use("/api/admin", adminDevelopersRoutes);
 app.use("/api/admin", adminCareersRoutes);
 app.use("/api/admin", adminClientStoriesRoutes);
 app.use("/api/admin", require("./routes/admin.routes"));
+app.use("/api/admin", adminExhibitionsRoutes);
 
 /* =========================
    AGENT

@@ -496,4 +496,60 @@ model PageView {
   @@index([path])
 }
 
+/* =========================
+ * Exhibition VIP Appointment
+ * ========================= */
+enum ExhibitionBookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+model Exhibition {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+  isActive    Boolean @default(true)
+
+  day1Date String // "2026-07-10"
+  day2Date String // "2026-07-11"
+
+  // JSON array of time slot strings, e.g. ["10:00-11:00","11:00-12:00"]
+  timeSlots String[] @default(["10:00-11:00", "11:00-12:00", "12:00-13:00", "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00"])
+
+  maxPerSlot Int @default(5)
+
+  bookings ExhibitionBooking[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+model ExhibitionBooking {
+  id String @id @default(cuid())
+
+  exhibitionId String
+  exhibition   Exhibition @relation(fields: [exhibitionId], references: [id], onDelete: Cascade)
+
+  day      String // "day1" or "day2"
+  timeSlot String // "10:00-11:00"
+
+  name  String
+  phone String
+  email String
+
+  status ExhibitionBookingStatus @default(CONFIRMED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([exhibitionId])
+  @@index([exhibitionId, day, timeSlot])
+  @@index([email])
+}
+
 
