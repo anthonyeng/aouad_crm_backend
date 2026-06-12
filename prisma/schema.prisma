@@ -516,9 +516,9 @@ model Exhibition {
   day2Date String // "2026-07-11"
 
   // JSON array of time slot strings, e.g. ["10:00-11:00","11:00-12:00"]
-  timeSlots String[] @default(["10:00-11:00", "11:00-12:00", "12:00-13:00", "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00"])
+  timeSlots String[] @default(["10-11", "11-12", "12-1", "2-3", "3-4", "4-5", "5-6", "6-7"])
 
-  maxPerSlot Int @default(5)
+  maxPerSlot Int @default(2)
 
   bookings ExhibitionBooking[]
 
